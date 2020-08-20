@@ -1,0 +1,33 @@
+{
+    "task": "Object Detection",
+    "pretrained": true,
+    "use_cuda": true,
+    "device": "cuda",
+
+    "data_type": "float32",
+
+    "model_option": {
+      "model": "mobilenetv2_q_ssd",
+      "backbone" : "mobilenetv2_q",
+      "feature_extract_flag": true,
+      "pretrained": false,
+      "width_mult": 1.0
+    },
+    "training_option" : {
+      "batch_size": 32,
+      "n_epochs": 400,
+      "learning_rate": 1e-3,
+      "momentum": 0.9,
+      "weight_decay": 5e-4,
+      "use_scheduler": true,
+      "lr_stepsize": 150,
+      "lr_gamma": 0.1
+    },
+    "dataset_option": {
+      "name": "nsfw",
+      "train_data_dir": "/DB/nsfw/train_case7.txt",
+      "valid_data_dir": "/DB/nsfw/test_case7.txt",
+      "test_data_dir": "/DB/nsfw/test_case7.txt",
+      "num_workers": 4
+    }
+}

@@ -41,5 +41,9 @@ class Logger(object):
 logger = Logger()
 def log_config(config):
     for key in config:
-        logger.info('{}: {}'.format(key, config[key]))
+        if isinstance(config[key], dict):
+            for k in config[key]:
+                logger.info('{}: {}'.format(k, config[key][k]))
+        else:
+            logger.info('{}: {}'.format(key, config[key]))
     logger.info('---------------------------------load config done---------------------------------')

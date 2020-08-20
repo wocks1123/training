@@ -12,22 +12,7 @@ import xml.etree.ElementTree as ET
 import torch.nn.functional as F
 import torchvision.transforms.functional as FT
 
-# from utils.logger import logger
 
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cuda:1")
-# device = OPTION["device"]
-
-# Label map
-# voc_labels = OPTION["label_list"]
-# label_map = {k: v + 1 for v, k in enumerate(voc_labels)}
-#
-# # nsfw_labels = ("man", "woman")
-# # label_map = {k: v + 1 for v, k in enumerate(nsfw_labels)}
-#
-#
-# label_map['background'] = 0
-# rev_label_map = {v: k for k, v in label_map.items()}  # Inverse mapping
 #
 # # Color map for bounding boxes of detected objects from https://sashat.me/2017/01/11/list-of-20-simple-distinct-colors/
 # distinct_colors = ['#e6194b', '#3cb44b', '#ffe119', '#0082c8', '#f58231', '#911eb4', '#46f0f0', '#f032e6',
@@ -36,139 +21,264 @@ import torchvision.transforms.functional as FT
 # label_color_map = {k: distinct_colors[i] for i, k in enumerate(label_map.keys())}
 
 
-# def parse_annotation(annotation_path):
-#     tree = ET.parse(annotation_path)
-#     root = tree.getroot()
-#
-#     boxes = list()
-#     labels = list()
-#     difficulties = list()
-#     for object in root.iter('object'):
-#
-#         difficult = int(object.find('difficult').text == '1')
-#
-#         label = object.find('name').text.lower().strip()
-#         if label not in label_map:
-#             continue
-#
-#         bbox = object.find('bndbox')
-#         xmin = int(bbox.find('xmin').text) - 1
-#         ymin = int(bbox.find('ymin').text) - 1
-#         xmax = int(bbox.find('xmax').text) - 1
-#         ymax = int(bbox.find('ymax').text) - 1
-#
-#         boxes.append([xmin, ymin, xmax, ymax])
-#         labels.append(label_map[label])
-#         difficulties.append(difficult)
-#
-#     return {'boxes': boxes, 'labels': labels, 'difficulties': difficulties}
+def parse_annotation(annotation_path):
+    label_list = ('aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'diningtable',
+                  'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor')
+
+    label_map = {k: v + 1 for v, k in enumerate(label_list)}
+
+    label_map['background'] = 0
+    rev_label_map = {v: k for k, v in label_map.items()}  # Inverse mapping
+
+    tree = ET.parse(annotation_path)
+    root = tree.getroot()
+
+    boxes = list()
+    labels = list()
+    difficulties = list()
+    for object in root.iter('object'):
+
+        difficult = int(object.find('difficult').text == '1')
+
+        label = object.find('name').text.lower().strip()
+        if label not in label_map:
+            continue
+
+        bbox = object.find('bndbox')
+        xmin = int(bbox.find('xmin').text) - 1
+        ymin = int(bbox.find('ymin').text) - 1
+        xmax = int(bbox.find('xmax').text) - 1
+        ymax = int(bbox.find('ymax').text) - 1
+
+        boxes.append([xmin, ymin, xmax, ymax])
+        labels.append(label_map[label])
+        difficulties.append(difficult)
+
+    return {'boxes': boxes, 'labels': labels, 'difficulties': difficulties}
 
 
-# def create_data_lists(voc07_path, voc12_path, output_folder):
-#     """
-#     Create lists of images, the bounding boxes and labels of the objects in these images, and save these to file.
-#
-#     :param voc07_path: path to the 'VOC2007' folder
-#     :param voc12_path: path to the 'VOC2012' folder
-#     :param output_folder: folder where the JSONs must be saved
-#     """
-#     voc07_path = os.path.abspath(voc07_path)
-#     voc12_path = os.path.abspath(voc12_path)
-#
-#     train_images = list()
-#     train_objects = list()
-#     n_objects = 0
-#
-#     if not os.path.exists(output_folder):
-#         os.makedirs(output_folder, exist_ok=True)
-#     # Training data
-#     for path in [voc07_path, voc12_path]:
-#
-#         # Find IDs of images in training data
-#         with open(os.path.join(path, 'ImageSets/Main/trainval.txt')) as f:
-#             ids = f.read().splitlines()
-#
-#         for id in ids:
-#             # Parse annotation's XML file
-#             objects = parse_annotation(os.path.join(path, 'Annotations', id + '.xml'))
-#             if len(objects) == 0:
-#                 continue
-#             n_objects += len(objects)
-#             train_objects.append(objects)
-#             train_images.append(os.path.join(path, 'JPEGImages', id + '.jpg'))
-#
-#     assert len(train_objects) == len(train_images)
-#
-#     # Save to file
-#     with open(os.path.join(output_folder, 'TRAIN_images.json'), 'w') as j:
-#         json.dump(train_images, j)
-#     with open(os.path.join(output_folder, 'TRAIN_objects.json'), 'w') as j:
-#         json.dump(train_objects, j)
-#     with open(os.path.join(output_folder, 'label_map.json'), 'w') as j:
-#         json.dump(label_map, j)  # save label map too
-#
-#     print('\nThere are %d training images containing a total of %d objects. Files have been saved to %s.' % (
-#         len(train_images), n_objects, os.path.abspath(output_folder)))
-#
-#     # Validation data
-#     test_images = list()
-#     test_objects = list()
-#     n_objects = 0
-#
-#     # Find IDs of images in validation data
-#     with open(os.path.join(voc07_path, 'ImageSets/Main/val.txt')) as f:
-#         ids = f.read().splitlines()
-#
-#     for id in ids:
-#         # Parse annotation's XML file
-#         objects = parse_annotation(os.path.join(voc07_path, 'Annotations', id + '.xml'))
-#         if len(objects) == 0:
-#             continue
-#         test_objects.append(objects)
-#         n_objects += len(objects)
-#         test_images.append(os.path.join(voc07_path, 'JPEGImages', id + '.jpg'))
-#
-#     assert len(test_objects) == len(test_images)
-#
-#     # Save to file
-#     with open(os.path.join(output_folder, 'TEST_images.json'), 'w') as j:
-#         json.dump(test_images, j)
-#     with open(os.path.join(output_folder, 'TEST_objects.json'), 'w') as j:
-#         json.dump(test_objects, j)
-#
-#     print('\nThere are %d validation images containing a total of %d objects. Files have been saved to %s.' % (
-#         len(test_images), n_objects, os.path.abspath(output_folder)))
+def create_data_lists(voc07_path, voc12_path, output_folder):
+    """
+    Create lists of images, the bounding boxes and labels of the objects in these images, and save these to file.
+
+    :param voc07_path: path to the 'VOC2007' folder
+    :param voc12_path: path to the 'VOC2012' folder
+    :param output_folder: folder where the JSONs must be saved
+    """
+    voc07_path = os.path.abspath(voc07_path)
+    voc12_path = os.path.abspath(voc12_path)
+
+    train_images = list()
+    train_objects = list()
+    n_objects = 0
+
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder, exist_ok=True)
+    # Training data
+    for path in [voc07_path, voc12_path]:
+
+        # Find IDs of images in training data
+        with open(os.path.join(path, 'ImageSets/Main/trainval.txt')) as f:
+            ids = f.read().splitlines()
+
+        for id in ids:
+            # Parse annotation's XML file
+            objects = parse_annotation(os.path.join(path, 'Annotations', id + '.xml'))
+            if len(objects) == 0:
+                continue
+            n_objects += len(objects)
+            train_objects.append(objects)
+            train_images.append(os.path.join(path, 'JPEGImages', id + '.jpg'))
+
+    assert len(train_objects) == len(train_images)
+
+    # Save to file
+    with open(os.path.join(output_folder, 'TRAIN_images.json'), 'w') as j:
+        json.dump(train_images, j)
+    with open(os.path.join(output_folder, 'TRAIN_objects.json'), 'w') as j:
+        json.dump(train_objects, j)
+    with open(os.path.join(output_folder, 'label_map.json'), 'w') as j:
+        json.dump(label_map, j)  # save label map too
+
+    print('\nThere are %d training images containing a total of %d objects. Files have been saved to %s.' % (
+        len(train_images), n_objects, os.path.abspath(output_folder)))
+
+    # Validation data
+    test_images = list()
+    test_objects = list()
+    n_objects = 0
+
+    # Find IDs of images in validation data
+    with open(os.path.join(voc07_path, 'ImageSets/Main/val.txt')) as f:
+        ids = f.read().splitlines()
+
+    for id in ids:
+        # Parse annotation's XML file
+        objects = parse_annotation(os.path.join(voc07_path, 'Annotations', id + '.xml'))
+        if len(objects) == 0:
+            continue
+        test_objects.append(objects)
+        n_objects += len(objects)
+        test_images.append(os.path.join(voc07_path, 'JPEGImages', id + '.jpg'))
+
+    assert len(test_objects) == len(test_images)
+
+    # Save to file
+    with open(os.path.join(output_folder, 'TEST_images.json'), 'w') as j:
+        json.dump(test_images, j)
+    with open(os.path.join(output_folder, 'TEST_objects.json'), 'w') as j:
+        json.dump(test_objects, j)
+
+    print('\nThere are %d validation images containing a total of %d objects. Files have been saved to %s.' % (
+        len(test_images), n_objects, os.path.abspath(output_folder)))
 
 
-# def create_testjson(voc07_path="/DB/VOC2007_test", output_folder="dataset"):
-#     # Find IDs of images in validation data
-#     with open(os.path.join(voc07_path, 'ImageSets/Main/test.txt')) as f:
-#         ids = f.read().splitlines()
-#
-#     # Validation data
-#     test_images = list()
-#     test_objects = list()
-#     n_objects = 0
-#
-#     for id in ids:
-#         # Parse annotation's XML file
-#         objects = parse_annotation(os.path.join(voc07_path, 'Annotations', id + '.xml'))
-#         if len(objects) == 0:
-#             continue
-#         test_objects.append(objects)
-#         n_objects += len(objects)
-#         test_images.append(os.path.join(voc07_path, 'JPEGImages', id + '.jpg'))
-#
-#     assert len(test_objects) == len(test_images)
-#
-#     # Save to file
-#     with open(os.path.join(output_folder, 'VOCTEST_images.json'), 'w') as j:
-#         json.dump(test_images, j)
-#     with open(os.path.join(output_folder, 'VOCTEST_objects.json'), 'w') as j:
-#         json.dump(test_objects, j)
-#
-#     print('\nThere are %d validation images containing a total of %d objects. Files have been saved to %s.' % (
-#         len(test_images), n_objects, os.path.abspath(output_folder)))
+def create_data_lists_07(voc07_path, output_folder):
+    """
+    Create lists of images, the bounding boxes and labels of the objects in these images, and save these to file.
+
+    :param voc07_path: path to the 'VOC2007' folder
+    :param voc12_path: path to the 'VOC2012' folder
+    :param output_folder: folder where the JSONs must be saved
+    """
+    voc07_path = os.path.abspath(voc07_path)
+
+    train_images = list()
+    train_objects = list()
+    n_objects = 0
+
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder, exist_ok=True)
+    # Training data
+    for path in [voc07_path]:
+
+        # Find IDs of images in training data
+        with open(os.path.join(path, 'ImageSets/Main/trainval.txt')) as f:
+            ids = f.read().splitlines()
+
+        for id in ids:
+            # Parse annotation's XML file
+            objects = parse_annotation(os.path.join(path, 'Annotations', id + '.xml'))
+            if len(objects) == 0:
+                continue
+            n_objects += len(objects)
+            train_objects.append(objects)
+            train_images.append(os.path.join(path, 'JPEGImages', id + '.jpg'))
+
+    assert len(train_objects) == len(train_images)
+
+    # Save to file
+    with open(os.path.join(output_folder, 'TRAIN_images.json'), 'w') as j:
+        json.dump(train_images, j)
+    with open(os.path.join(output_folder, 'TRAIN_objects.json'), 'w') as j:
+        json.dump(train_objects, j)
+    # with open(os.path.join(output_folder, 'label_map.json'), 'w') as j:
+    #     json.dump(label_map, j)  # save label map too
+
+    print('\nThere are %d training images containing a total of %d objects. Files have been saved to %s.' % (
+        len(train_images), n_objects, os.path.abspath(output_folder)))
+
+    # Validation data
+    test_images = list()
+    test_objects = list()
+    n_objects = 0
+
+    # Find IDs of images in validation data
+    with open(os.path.join(voc07_path, 'ImageSets/Main/val.txt')) as f:
+        ids = f.read().splitlines()
+
+    for id in ids:
+        # Parse annotation's XML file
+        objects = parse_annotation(os.path.join(voc07_path, 'Annotations', id + '.xml'))
+        if len(objects) == 0:
+            continue
+        test_objects.append(objects)
+        n_objects += len(objects)
+        test_images.append(os.path.join(voc07_path, 'JPEGImages', id + '.jpg'))
+
+    assert len(test_objects) == len(test_images)
+
+    # Save to file
+    with open(os.path.join(output_folder, 'TEST_images.json'), 'w') as j:
+        json.dump(test_images, j)
+    with open(os.path.join(output_folder, 'TEST_objects.json'), 'w') as j:
+        json.dump(test_objects, j)
+
+    print('\nThere are %d validation images containing a total of %d objects. Files have been saved to %s.' % (
+        len(test_images), n_objects, os.path.abspath(output_folder)))
+
+
+
+def create_data_0712(voc07_path, voc12_path, output_folder="data/json"):
+    voc07_path = os.path.abspath(voc07_path)
+    voc12_path = os.path.abspath(voc12_path)
+
+    train_images = list()
+    train_objects = list()
+    n_objects = 0
+
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder, exist_ok=True)
+    # Training data
+    for path in [voc07_path, voc12_path]:
+
+        # Find IDs of images in training data
+        with open(os.path.join(path, 'ImageSets/Main/trainval.txt')) as f:
+            ids = f.read().splitlines()
+
+        for id in ids:
+            # Parse annotation's XML file
+            objects = parse_annotation(os.path.join(path, 'Annotations', id + '.xml'))
+            if len(objects) == 0:
+                continue
+            n_objects += len(objects)
+            train_objects.append(objects)
+            train_images.append(os.path.join(path, 'JPEGImages', id + '.jpg'))
+
+    assert len(train_objects) == len(train_images)
+
+    # Save to file
+    with open(os.path.join(output_folder, '0712TRAIN_images.json'), 'w') as j:
+        json.dump(train_images, j)
+    with open(os.path.join(output_folder, '0712TRAIN_objects.json'), 'w') as j:
+        json.dump(train_objects, j)
+    # with open(os.path.join(output_folder, 'label_map.json'), 'w') as j:
+    #     json.dump(label_map, j)  # save label map too
+
+    print('\nThere are %d training images containing a total of %d objects. Files have been saved to %s.' % (
+        len(train_images), n_objects, os.path.abspath(output_folder)))
+
+
+
+def create_testjson(voc07_path="/DB/VOC2007_test", output_folder="dataset"):
+    # Find IDs of images in validation data
+    with open(os.path.join(voc07_path, 'ImageSets/Main/test.txt')) as f:
+        ids = f.read().splitlines()
+
+    # Validation data
+    test_images = list()
+    test_objects = list()
+    n_objects = 0
+
+    for id in ids:
+        # Parse annotation's XML file
+        objects = parse_annotation(os.path.join(voc07_path, 'Annotations', id + '.xml'))
+        if len(objects) == 0:
+            continue
+        test_objects.append(objects)
+        n_objects += len(objects)
+        test_images.append(os.path.join(voc07_path, 'JPEGImages', id + '.jpg'))
+
+    assert len(test_objects) == len(test_images)
+
+    # Save to file
+    with open(os.path.join(output_folder, 'VOCTEST_images.json'), 'w') as j:
+        json.dump(test_images, j)
+    with open(os.path.join(output_folder, 'VOCTEST_objects.json'), 'w') as j:
+        json.dump(test_objects, j)
+
+    print('\nThere are %d validation images containing a total of %d objects. Files have been saved to %s.' % (
+        len(test_images), n_objects, os.path.abspath(output_folder)))
 
 
 def decimate(tensor, m):
@@ -190,7 +300,7 @@ def decimate(tensor, m):
     return tensor
 
 
-def calculate_mAP(det_boxes, det_labels, det_scores, true_boxes, true_labels, true_difficulties, label_map, device, rev_label_map):
+def calculate_mAP(det_boxes, det_labels, det_scores, true_boxes, true_labels, true_difficulties, label_map, rev_label_map, device):
     """
     Calculate the Mean Average Precision (mAP) of detected objects.
 
@@ -353,7 +463,7 @@ def cxcy_to_gcxgcy(cxcy, priors_cxcy):
     For the center coordinates, find the offset with respect to the prior box, and scale by the size of the prior box.
     For the size coordinates, scale by the size of the prior box, and convert to the log-space.
 
-    In the model, we are predicting bounding box coordinates in this encoded form.
+    In the models, we are predicting bounding box coordinates in this encoded form.
 
     :param cxcy: bounding boxes in center-size coordinates, a tensor of size (n_priors, 4)
     :param priors_cxcy: prior boxes with respect to which the encoding must be performed, a tensor of size (n_priors, 4)
@@ -369,13 +479,13 @@ def cxcy_to_gcxgcy(cxcy, priors_cxcy):
 
 def gcxgcy_to_cxcy(gcxgcy, priors_cxcy):
     """
-    Decode bounding box coordinates predicted by the model, since they are encoded in the form mentioned above.
+    Decode bounding box coordinates predicted by the models, since they are encoded in the form mentioned above.
 
     They are decoded into center-size coordinates.
 
     This is the inverse of the function above.
 
-    :param gcxgcy: encoded bounding boxes, i.e. output of the model, a tensor of size (n_priors, 4)
+    :param gcxgcy: encoded bounding boxes, i.e. output of the models, a tensor of size (n_priors, 4)
     :param priors_cxcy: prior boxes with respect to which the encoding is defined, a tensor of size (n_priors, 4)
     :return: decoded bounding boxes in center-size form, a tensor of size (n_priors, 4)
     """
@@ -660,7 +770,6 @@ def transform(image, boxes, labels, difficulties, split):
         # Fill surrounding space with the mean of ImageNet data that our base VGG was trained on
         if random.random() < 0.5:
             new_image, new_boxes = expand(new_image, boxes, filler=mean)
-
         # Randomly crop image (zoom in)
         new_image, new_boxes, new_labels, new_difficulties = random_crop(new_image, new_boxes, new_labels,
                                                                          new_difficulties)
@@ -700,7 +809,7 @@ def accuracy(scores, targets, k):
     """
     Computes top-k accuracy, from predicted and true labels.
 
-    :param scores: scores from the model
+    :param scores: scores from the models
     :param targets: true labels
     :param k: k in top-k accuracy
     :return: top-k accuracy
@@ -714,11 +823,11 @@ def accuracy(scores, targets, k):
 
 def save_checkpoint(epoch, epochs_since_improvement, model, optimizer, loss, best_loss, is_best, dest_dir):
     """
-    Save model checkpoint.
+    Save models checkpoint.
 
     :param epoch: epoch number
     :param epochs_since_improvement: number of epochs since last improvement
-    :param model: model
+    :param model: models
     :param optimizer: optimizer
     :param loss: validation loss in this epoch
     :param best_loss: best validation loss achieved so far (not necessarily in this checkpoint)
@@ -787,9 +896,10 @@ def detect_objects(model, priors_cxcy, predicted_locs, predicted_scores, min_sco
     """
     batch_size = predicted_locs.size(0)
     n_priors = priors_cxcy.size(0)
-    print('predicted_scores', predicted_scores[0][:3])
+    priors_cxcy = priors_cxcy.to(device)
+    # print('predicted_scores', predicted_scores[0][:3])
     predicted_scores = F.softmax(predicted_scores, dim=2)  # (N, 8732, n_classes)
-    print('predicted_scores', predicted_scores[0][:3])
+    # print('softmax predicted_scores', predicted_scores[0][:3])
 
     # Lists to store final predicted boxes, labels, and scores for all images
     all_images_boxes = list()
@@ -799,25 +909,26 @@ def detect_objects(model, priors_cxcy, predicted_locs, predicted_scores, min_sco
     assert n_priors == predicted_locs.size(1) == predicted_scores.size(1)
 
     for i in range(batch_size):
-        print('predicted_scores', predicted_scores[i][:3])
+        # print('predicted_scores', predicted_scores[i][:3])
         # Decode object coordinates from the form we regressed predicted boxes to
         a = predicted_locs[i][:3]
         b = priors_cxcy[:3]
 
-        print("predicted_locs < 0", predicted_locs < 0)
-
-        print("a", a)
-        print("b", b)
+        # print("predicted_locs < 0", predicted_locs < 0)
+        #
+        # print("a", a)
+        # print("b", b)
         res = cxcy_to_xy(
             gcxgcy_to_cxcy(a, b))
-        print("res", res)
+        # print("res", res)
 
         decoded_locs = cxcy_to_xy(
             gcxgcy_to_cxcy(predicted_locs[i], priors_cxcy))  # (8732, 4), these are fractional pt. coordinates
 
-        print("predicted_locs[i].shape", predicted_locs[i].shape)
-        print("decoded_locs.shape", decoded_locs.shape)
-        print("priors_cxcy.shape", priors_cxcy.shape)
+        # print("predicted_locs[i].shape", predicted_locs[i].shape)
+        # print("decoded_locs.shape", decoded_locs.shape)
+        # print("decoded_locs", decoded_locs[950:960])
+        # print("priors_cxcy.shape", priors_cxcy.shape)
 
         # Lists to store boxes and scores for this image
         image_boxes = list()
@@ -827,40 +938,43 @@ def detect_objects(model, priors_cxcy, predicted_locs, predicted_scores, min_sco
         max_scores, best_label = predicted_scores[i].max(dim=1)  # (8732)
 
         # Check for each class
+        # print("n_classes", n_classes)
         for c in range(1, n_classes):
             # Keep only predicted boxes and scores where scores for this class are above the minimum score
+           # print("predicted_scores", predicted_scores.shape)
             class_scores = predicted_scores[i][:, c]  # (8732)
-            print("class_scores.shape", class_scores.shape)
+            # print("class_scores[:5]", c, class_scores[:5])
             score_above_min_score = class_scores > min_score  # torch.uint8 (byte) tensor, for indexing
-            print("score_above_min_score.shape", score_above_min_score.shape)
+            #print("score_above_min_score.shape", score_above_min_score.shape)
             n_above_min_score = score_above_min_score.sum().item()
             if n_above_min_score == 0:
                 continue
-            print("score_above_min_score", score_above_min_score)
+            #print("score_above_min_score", score_above_min_score)
             class_scores = class_scores[score_above_min_score]  # (n_qualified), n_min_score <= 8732
-            print("class_scores.shape", class_scores.shape)
+            # print("class_scores", class_scores)
             class_decoded_locs = decoded_locs[score_above_min_score]  # (n_qualified, 4)
-            print("class_decoded_locs.shape", class_decoded_locs.shape)
+            # print("before class_decoded_locs", class_decoded_locs)
 
-            print("before sort class_scores", class_scores)
+            #print("before sort class_scores", class_scores)
             # Sort predicted boxes and scores by scores
             class_scores, sort_ind = class_scores.sort(dim=0, descending=True)  # (n_qualified), (n_min_score)
-            print("class_scores", class_scores)
-            print("sort_ind ", sort_ind)
-            print("before class_decoded_locs", class_decoded_locs)
+            # print("sorted class_scores", len(class_scores), class_scores)
+            # print("sort_ind ", sort_ind)
+            # print("before class_decoded_locs", class_decoded_locs)
             class_decoded_locs = class_decoded_locs[sort_ind]  # (n_min_score, 4)
-            print("after class_decoded_locs", class_decoded_locs)
-            print("class_decoded_locs.sahpe ", class_decoded_locs.shape)
+            # print("after class_decoded_locs", class_decoded_locs)
+            # print("class_decoded_locs.sahpe ", class_decoded_locs.shape)
             # Find the overlap between predicted boxes
             overlap = find_jaccard_overlap(class_decoded_locs, class_decoded_locs)  # (n_qualified, n_min_score)
-            print("overlap ", overlap.shape)
+            # print("overlap ", overlap.shape)
+            # print("overlap ", overlap)
             # Non-Maximum Suppression (NMS)
 
             # A torch.uint8 (byte) tensor to keep track of which predicted boxes to suppress
             # 1 implies suppress, 0 implies don't suppress
-            print("n_above_min_score", n_above_min_score)
+            #print("n_above_min_score", n_above_min_score)
             suppress = torch.zeros((n_above_min_score), dtype=torch.uint8).to(device)  # (n_qualified)
-            print("suppress", suppress)
+            # print("suppress", suppress)
 
             # Consider each box in order of decreasing scores
             for box in range(class_decoded_locs.size(0)):
@@ -871,27 +985,27 @@ def detect_objects(model, priors_cxcy, predicted_locs, predicted_scores, min_sco
                 # Suppress boxes whose overlaps (with this box) are greater than maximum overlap
                 # Find such boxes and update suppress indices
                 # suppress = torch.max(suppress, overlap[box] > max_overlap)
-                print("box", box)
-                print("before suppress", suppress)
-                print("overlap[box]", overlap[box])
+                #print("box", box)
+                #print("before suppress", suppress)
+                #print("overlap[box]", overlap[box])
 
-                print("(overlap[box] > max_overlap).type(torch.uint8)", (overlap[box] > max_overlap).type(torch.uint8))
+                #print("(overlap[box] > max_overlap).type(torch.uint8)", (overlap[box] > max_overlap).type(torch.uint8))
                 suppress = torch.max(suppress, (overlap[box] > max_overlap).type(torch.uint8))
-                print("after suppress", suppress)
+                #print("after suppress", suppress)
                 # The max operation retains previously suppressed boxes, like an 'OR' operation
 
                 # Don't suppress this box, even though it has an overlap of 1 with itself
                 suppress[box] = 0
-            print("out suppress", suppress)
-            # Store only unsuppressed boxes for this class
-            print("1 - suppress", 1 - suppress)
-            print("class_decoded_locs", class_decoded_locs)
-            print("class_decoded_locs[1 - suppress]", class_decoded_locs[1 - suppress])
+            # print("out suppress", suppress)
+            # # Store only unsuppressed boxes for this class
+            # print("1 - suppress", 1 - suppress)
+            # print("class_decoded_locs", class_decoded_locs)
+            # print("class_decoded_locs[1 - suppress]", class_decoded_locs[1 - suppress])
             image_boxes.append(class_decoded_locs[1 - suppress])
 
-            print("(1 - suppress).sum().item()", (1 - suppress).sum().item())
-            print("[c]", [c])
-            print("(1 - suppress).sum().item() * [c]", (1 - suppress).sum().item() * [c])
+            # print("(1 - suppress).sum().item()", (1 - suppress).sum().item())
+            # print("[c]", [c])
+            # print("(1 - suppress).sum().item() * [c]", (1 - suppress).sum().item() * [c])
 
             image_labels.append(torch.LongTensor((1 - suppress).sum().item() * [c]).to(device))
             image_scores.append(class_scores[1 - suppress])
@@ -974,3 +1088,136 @@ def create_cifar10_test500_json():
         json.dump(img_infos, j, indent=4)
     # with open(dest_file, 'r') as j:
     #     read_info = json.load(j)
+
+
+def get_tensortype(type_name):
+    if type_name == "float32":
+        data_type = torch.float32
+    elif type_name == "float16":
+        data_type = torch.float16
+    elif type_name == "int32":
+        data_type = torch.int32
+    else:
+        raise Exception("Wrong Data Type... Check config['data_type']")
+
+    return data_type
+
+
+from PIL import Image
+from torchvision import transforms
+
+
+def create_pascalvoc_test1000():
+    """
+    pascalvoc test 데이터 중 1000개
+    :return:
+    """
+    path = "/DB/VOC2007_test/JPEGImages"
+    dest_img_dir = "/DB/VOC2007_test1000/JPEGImages"
+    dest_bin_dir = "/DB/VOC2007_test1000/Binary"
+    dest_android_dir = "/storage/emulated/0/Download/Dataset/VOC2007_test1000/Binary"
+    listd = os.listdir(path)
+    listd.sort()
+
+    img1000 = listd[:1000]
+
+    json_dict = []
+    for img in img1000:
+        img_path = os.path.join(path, img)
+        original_image = Image.open(img_path, mode='r')
+        file_name = img_path.split("/")[-1]
+
+        dest_path = f"{dest_img_dir}/{file_name}"
+        print("move to", img_path, dest_path)
+        shutil.copyfile(img_path, dest_path)
+
+        resize = transforms.Resize((300, 300))
+        resize_img = resize(original_image)
+        resize_img_data = resize_img.load()
+
+        dest_bin_path = f"{dest_bin_dir}/{file_name[:-4]}.bin"
+        bin_path = f"{dest_android_dir}/{file_name[:-4]}.bin"
+        fp = open(dest_bin_path, "wb")
+
+        for i in range(300):
+            for j in range(300):
+                fp.write(bytes([255]))
+                fp.write(bytes([resize_img_data[j, i][0]]))
+                fp.write(bytes([resize_img_data[j, i][1]]))
+                fp.write(bytes([resize_img_data[j, i][2]]))
+
+        json_dict.append({
+            "img_path": bin_path,
+            "width": original_image.width,
+            "height": original_image.height
+        })
+        fp.close()
+
+    import json
+    with open("data/json/PASCALVOC_TEST1000.json", 'w') as j:
+        json.dump(json_dict, j, indent=4)
+
+
+
+def create_pascalvoc_test100():
+    """
+    pascalvoc test 데이터 중 1000개
+    :return:
+    """
+    path = "/DB/VOC2007_test/JPEGImages"
+    dest_img_dir = "/DB/VOC2007_test100/JPEGImages"
+    dest_bin_dir = "/DB/VOC2007_test100/Binary"
+    dest_android_dir = "/storage/emulated/0/Download/Dataset/VOC2007_test100/Binary"
+    listd = os.listdir(path)
+    listd.sort()
+
+    img100 = listd[:100]
+
+    json_dict = []
+    for img in img100:
+        img_path = os.path.join(path, img)
+        original_image = Image.open(img_path, mode='r')
+        file_name = img_path.split("/")[-1]
+
+        dest_path = f"{dest_img_dir}/{file_name}"
+        print("move to", img_path, dest_path)
+        shutil.copyfile(img_path, dest_path)
+
+        resize = transforms.Resize((300, 300))
+        resize_img = resize(original_image)
+        resize_img_data = resize_img.load()
+
+        dest_bin_path = f"{dest_bin_dir}/{file_name[:-4]}.bin"
+        bin_path = f"{dest_android_dir}/{file_name[:-4]}.bin"
+        fp = open(dest_bin_path, "wb")
+
+        for i in range(300):
+            for j in range(300):
+                fp.write(bytes([255]))
+                fp.write(bytes([resize_img_data[j, i][0]]))
+                fp.write(bytes([resize_img_data[j, i][1]]))
+                fp.write(bytes([resize_img_data[j, i][2]]))
+
+        json_dict.append({
+            "img_path": bin_path,
+            "width": original_image.width,
+            "height": original_image.height
+        })
+        fp.close()
+
+    import json
+    with open("/DB/VOC2007_test100/json/PASCALVOC_TEST100.json", 'w') as j:
+        json.dump(json_dict, j, indent=4)
+
+    import json
+    with open('data/json/VOCTEST_images.json', 'r') as j:
+        images = json.load(j)
+    with open('data/json/VOCTEST_objects.json', 'r') as j:
+        objects = json.load(j)
+    objects100 = objects[:100]
+    images100 = images[:100]
+    import json
+    with open("data/json/VOCTEST100_images.json", 'w') as j:
+        json.dump(images100, j, indent=4)
+    with open("data/json/VOCTEST100_objects.json", 'w') as j:
+        json.dump(objects100, j, indent=4)
