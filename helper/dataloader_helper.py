@@ -51,7 +51,7 @@ def get_nsfw(anno_txt_path, split):
     return dataset, NSFW_LABELS
 
 
-def load_dataset(dataset_name, data_dir, split, options, transforms, batch_size):
+def load_dataset(dataset_name, data_dir, split, options, transforms, batch_size, shuffle=False):
     num_workers = options["num_workers"]
 
     if dataset_name == "cifar10":
@@ -68,7 +68,7 @@ def load_dataset(dataset_name, data_dir, split, options, transforms, batch_size)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=shuffle,
         collate_fn=dataset.collate_fn,
         num_workers=num_workers,
         pin_memory=True,

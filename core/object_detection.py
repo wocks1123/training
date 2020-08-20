@@ -42,7 +42,8 @@ def training(config_path, transforms=None):
         split="TRAIN",
         options=dataset_option,
         transforms=transforms["TRAIN"],
-        batch_size=batch_size
+        batch_size=batch_size,
+        shuffle=True
     )
     val_loader, _ = load_dataset(
         dataset_name=dataset_option["name"],
